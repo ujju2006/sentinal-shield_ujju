@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SentinelShield SOC Gateway</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0b0d14;
+            --panel-bg: rgba(17, 21, 32, 0.85);
+            --panel-border: #1d2335;
+            --accent-blue: #3b82f6;
+            --accent-cyan: #06b6d4;
+            --text-main: #f3f4f6;
+            --text-muted: #8b949e;
+        }
+
+        body {
+            margin: 0; padding: 0; font-family: 'Inter', sans-serif;
+            background: var(--bg-color); color: var(--text-main);
+            height: 100vh; display: flex; flex-direction: column;
+            background-image: 
+                radial-gradient(circle at 15% 50%, rgba(59, 130, 246, 0.08) 0%, transparent 50%),
+                linear-gradient(rgba(29, 35, 53, 0.3) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(29, 35, 53, 0.3) 1px, transparent 1px);
+            background-size: 100% 100%, 30px 30px, 30px 30px;
+        }
+
+        .main-wrapper {
+            flex: 1; display: flex; align-items: center; justify-content: center;
+        }
+
+        .login-container {
+            display: flex; width: 900px; height: 500px;
+            background: var(--panel-bg); border: 1px solid var(--panel-border);
+            border-radius: 16px; overflow: hidden; box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+            backdrop-filter: blur(10px);
+        }
+
+        .left-panel {
+            flex: 1; background: linear-gradient(135deg, rgba(59,130,246,0.1), transparent);
+            padding: 50px; display: flex; flex-direction: column; justify-content: center;
+            border-right: 1px solid var(--panel-border);
+        }
+
+        .logo-icon {
+            width: 64px; height: 64px; border-radius: 12px;
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-cyan));
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.5rem; font-weight: bold; font-family: 'Outfit', sans-serif;
+            box-shadow: 0 0 25px rgba(59, 130, 246, 0.4); margin-bottom: 30px;
+        }
+
+        .left-panel h1 { font-family: 'Outfit', sans-serif; font-size: 2.5rem; margin: 0 0 15px 0; letter-spacing: -1px; }
+        .left-panel p { color: var(--accent-cyan); font-size: 1.1rem; line-height: 1.5; margin: 0; font-weight: 500; }
+
+        .right-panel {
+            width: 400px; padding: 50px 40px; display: flex; flex-direction: column; justify-content: center;
+        }
+
+        .right-panel h2 { font-family: 'Outfit', sans-serif; font-size: 1.5rem; margin: 0 0 30px 0; border-bottom: 2px solid var(--accent-blue); padding-bottom: 10px; display: inline-block; }
+
+        .form-group { margin-bottom: 20px; }
+        .form-group label { display: block; font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 8px; letter-spacing: 1px; }
+        .form-group input {
+            width: 100%; padding: 12px 15px; background: rgba(0,0,0,0.3);
+            border: 1px solid var(--panel-border); border-radius: 6px;
+            color: white; font-family: 'JetBrains Mono', monospace;
+            transition: all 0.3s;
+        }
+        .form-group input:focus { outline: none; border-color: var(--accent-blue); box-shadow: 0 0 10px rgba(59,130,246,0.2); }
+
+        .btn-submit {
+            width: 100%; padding: 14px; background: linear-gradient(90deg, var(--accent-blue), var(--accent-cyan));
+            border: none; border-radius: 6px; color: white; font-weight: 600; font-size: 0.9rem;
+            cursor: pointer; font-family: 'Inter', sans-serif; margin-top: 10px;
+            transition: opacity 0.3s;
+        }
+        .btn-submit:hover { opacity: 0.9; }
+
+        .error-msg { color: #ef4444; font-size: 0.85rem; margin-bottom: 15px; text-align: center; }
+
+        .footer {
+            padding: 15px 40px; background: rgba(11, 13, 20, 0.95); border-top: 1px solid var(--panel-border);
+            display: flex; justify-content: space-around; font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; color: var(--text-muted);
+        }
+        .footer span { color: var(--accent-cyan); font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <div class="main-wrapper">
+        <div class="login-container">
+            <div class="left-panel">
+                <div class="logo-icon">SS</div>
+                <h1>SentinelShield</h1>
+                <p>Advanced Intrusion Detection<br>& Web Protection System</p>
+                <div style="margin-top: 40px; font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; color: var(--text-muted);">
+                    Authorized personnel only.<br>All access attempts are monitored and logged.
+                </div>
+            </div>
+            <div class="right-panel">
+                <h2>SOC Access Console</h2>
+                {% if error %}
+                <div class="error-msg" style="color: #ef4444; font-size: 0.85rem; margin-bottom: 15px; text-align: center;">{{ error }}</div>
+                {% endif %}
+                {% if request.args.get('success') %}
+                <div class="success-msg" style="color: var(--color-low); font-size: 0.85rem; margin-bottom: 15px; text-align: center;">{{ request.args.get('success') }}</div>
+                {% endif %}
+                <form action="/login" method="POST">
+                    <div class="form-group">
+                        <label>Username</label>
+                        <input type="text" name="username" required autocomplete="off" placeholder="admin">
+                    </div>
+                    <div class="form-group">
+                        <label>Password</label>
+                        <input type="password" name="password" required placeholder="••••••••">
+                    </div>
+                    <button type="submit" class="btn-submit">[ Access SOC Dashboard ]</button>
+                </form>
+                <div style="margin-top: 20px; text-align: center; font-size: 0.85rem;">
+                    <a href="/signup" style="color: var(--accent-cyan); text-decoration: none;">Create SOC Analyst Account &rarr;</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="footer">
+        <div>Threat Intelligence Services: <span>ONLINE</span></div>
+        <div>Detection Rules: <span>SYNCHRONIZED</span></div>
+        <div>SOC Environment: <span>ACTIVE</span></div>
+    </div>
+
+</body>
+</html>

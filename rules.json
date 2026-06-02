@@ -1,0 +1,36 @@
+{
+  "rules": [
+    {
+      "rule_id": "SEC-SQLI-001",
+      "category": "SQL Injection",
+      "description": "SQLi Injection Attempt",
+      "regex": "(?i)(UNION\\s+SELECT|'\\s*OR\\s*.*=.*|--|#)",
+      "threat_score": 5,
+      "severity": "Critical"
+    },
+    {
+      "rule_id": "SEC-XSS-001",
+      "category": "XSS",
+      "description": "Cross-Site Scripting Attempt",
+      "regex": "(?i)(<script.*?>|onerror\\s*=|onload\\s*=)",
+      "threat_score": 5,
+      "severity": "High"
+    },
+    {
+      "rule_id": "SEC-LFI-001",
+      "category": "LFI",
+      "description": "LFI / Path Traversal Attempt",
+      "regex": "(?i)(\\.\\./\\.\\./|/etc/passwd|/etc/shadow)",
+      "threat_score": 4,
+      "severity": "High"
+    },
+    {
+      "rule_id": "SEC-CMD-001",
+      "category": "Command Injection",
+      "description": "Command Injection Attempt",
+      "regex": "(?i)(\\|\\||&&|whoami|uname|net\\s+user|cat\\s+)",
+      "threat_score": 5,
+      "severity": "Critical"
+    }
+  ]
+}

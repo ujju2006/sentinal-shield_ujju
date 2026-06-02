@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SentinelShield SOC Educational Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        /* Base Variables and Layout */
+        :root {
+            --bg-color: #0b0d14; --panel-bg: rgba(17, 21, 32, 0.85); --panel-border: #1d2335;
+            --text-main: #f3f4f6; --text-muted: #8b949e;
+            --accent-blue: #3b82f6; --accent-cyan: #06b6d4; --accent-magenta: #ec4899;
+            --color-critical: #ef4444; --color-high: #f97316; --color-medium: #eab308; --color-low: #22c55e;
+            --font-main: 'Inter', sans-serif; --font-heading: 'Outfit', sans-serif; --font-mono: 'JetBrains Mono', monospace;
+        }
+
+        * { box-sizing: border-box; }
+        body { font-family: var(--font-main); background-color: var(--bg-color); color: var(--text-main); margin: 0; padding: 0; }
+        
+        /* HEADER */
+        header { display: flex; justify-content: space-between; align-items: center; padding: 15px 40px; background: rgba(11, 13, 20, 0.95); border-bottom: 1px solid var(--panel-border); position: sticky; top: 0; z-index: 100; }
+        .logo-area { display: flex; align-items: center; gap: 15px; }
+        .logo-icon { width: 36px; height: 36px; border-radius: 8px; background: linear-gradient(135deg, var(--accent-blue), var(--accent-cyan)); display: flex; align-items: center; justify-content: center; font-weight: bold; font-family: var(--font-heading); color: #fff; }
+        .logo-text h1 { font-family: var(--font-heading); font-size: 1.4rem; margin: 0; white-space: nowrap; }
+        .soc-status { display: flex; gap: 20px; font-size: 0.8rem; font-family: var(--font-mono); color: var(--text-muted); align-items: center; }
+        .soc-status-item { display: flex; flex-direction: column; white-space: nowrap; }
+        .soc-status-item span { color: var(--accent-cyan); font-weight: bold; margin-top: 2px; }
+        .header-actions { display: flex; gap: 10px; align-items: center; }
+        .btn { background: rgba(255,255,255,0.05); border: 1px solid var(--panel-border); color: var(--text-main); padding: 8px 16px; border-radius: 6px; font-size: 0.85rem; font-weight: 600; cursor: pointer; transition: all 0.2s; white-space: nowrap; }
+        .btn:hover { background: rgba(255,255,255,0.1); }
+        .btn-report { background: rgba(59, 130, 246, 0.15); border-color: var(--accent-blue); color: #93c5fd; }
+        .btn-logout { background: rgba(239, 68, 68, 0.15); border-color: var(--color-critical); color: var(--color-critical); text-decoration: none;}
+
+        .container { max-width: 1600px; margin: 0 auto; padding: 30px 40px; display: flex; flex-direction: column; gap: 40px; }
+        .section-title { font-family: var(--font-heading); font-size: 1.2rem; font-weight: 600; color: #e5e7eb; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; text-transform: uppercase; }
+        .section-title::before { content: ''; width: 6px; height: 24px; background: linear-gradient(180deg, var(--accent-blue), transparent); border-radius: 3px; }
+        .panel { background: var(--panel-bg); border: 1px solid var(--panel-border); border-radius: 12px; padding: 25px; }
+
+        /* 1. OVERVIEW CARDS */
+        .overview-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 20px; }
+        .overview-card { border: 1px solid var(--panel-border); border-radius: 10px; padding: 20px; display: flex; flex-direction: column; align-items: center; background: rgba(0,0,0,0.2); cursor: pointer; transition: transform 0.2s; }
+        .overview-card:hover { transform: translateY(-5px); border-color: rgba(255,255,255,0.2); }
+        .overview-value { font-family: var(--font-heading); font-size: 2.5rem; font-weight: 800; line-height: 1.2; }
+        .overview-label { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600; }
+
+        /* 2. LIVE MONITOR */
+        .live-feed-container { height: 350px; overflow-y: auto; background: rgba(0,0,0,0.3); border: 1px solid var(--panel-border); border-radius: 8px; }
+        table { width: 100%; border-collapse: collapse; text-align: left; }
+        th { background: rgba(255,255,255,0.02); color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase; padding: 12px; position: sticky; top: 0; }
+        td { padding: 12px; font-size: 0.85rem; border-bottom: 1px solid rgba(255,255,255,0.02); font-family: var(--font-mono); }
+        .status-badge { padding: 4px 10px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; }
+        .status-badge.allowed { background: rgba(34, 197, 94, 0.15); color: var(--color-low); border: 1px solid rgba(34, 197, 94, 0.3); }
+        .status-badge.blocked { background: rgba(239, 68, 68, 0.15); color: var(--color-critical); border: 1px solid rgba(239, 68, 68, 0.3); }
+        .status-badge.ratelimit { background: rgba(234, 179, 8, 0.15); color: var(--color-medium); border: 1px solid rgba(234, 179, 8, 0.3); }
+
+        /* 3 & 4. ANALYTICS */
+        .split-grid { display: grid; grid-template-columns: 3fr 2fr; gap: 40px; }
+        .chart-box { background: rgba(0,0,0,0.2); border: 1px solid var(--panel-border); border-radius: 8px; padding: 15px; margin-bottom: 20px; }
+        .threshold-meter { background: rgba(0,0,0,0.3); border: 1px solid var(--panel-border); border-radius: 8px; padding: 20px; display: flex; flex-direction: column; align-items: center; margin-bottom: 20px;}
+
+        /* 5. LOG VIEWER */
+        .log-viewer { background: #000; border: 1px solid #333; border-radius: 8px; padding: 20px; height: 400px; overflow-y: auto; font-family: var(--font-mono); font-size: 0.85rem; color: #d1d5db; line-height: 1.6; }
+        .log-entry { margin-bottom: 15px; border-bottom: 1px dashed #333; padding-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+        .btn-analysis { background: rgba(59, 130, 246, 0.1); border: 1px solid var(--accent-blue); color: var(--accent-blue); padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; cursor: pointer; }
+        .btn-analysis:hover { background: rgba(59, 130, 246, 0.3); }
+
+        /* 7. IMPORT ENGINE */
+        .investigation-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; }
+        .investigation-card { background: rgba(0,0,0,0.2); border: 1px solid var(--panel-border); border-radius: 8px; padding: 20px; display: flex; flex-direction: column; gap: 15px; }
+        .investigation-card input { padding: 10px; background: rgba(255,255,255,0.05); border: 1px solid var(--panel-border); color: white; border-radius: 4px; }
+
+        /* MODALS */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); backdrop-filter: blur(5px); display: none; justify-content: center; align-items: center; z-index: 1000; }
+        .modal { background: var(--panel-bg); border: 1px solid var(--panel-border); border-radius: 12px; width: 800px; max-width: 90%; max-height: 90vh; overflow-y: auto; padding: 30px; box-shadow: 0 20px 50px rgba(0,0,0,0.5); }
+        .modal-header { font-family: var(--font-heading); font-size: 1.5rem; margin-bottom: 20px; border-bottom: 1px solid var(--panel-border); padding-bottom: 15px; display: flex; justify-content: space-between; }
+        
+        /* Forensic Modal specific */
+        .forensic-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .forensic-block { background: rgba(0,0,0,0.3); border: 1px solid var(--panel-border); border-radius: 6px; padding: 15px; }
+        .forensic-label { font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 5px; }
+        .forensic-value { font-family: var(--font-mono); font-size: 0.9rem; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="logo-area">
+            <div class="logo-icon">SS</div>
+            <div class="logo-text"><h1>SentinelShield SOC</h1></div>
+        </div>
+        <div class="soc-status">
+            <div class="soc-status-item">Detection Engine: <span>ACTIVE</span></div>
+            <div class="soc-status-item">Traffic Monitoring: <span>ENABLED</span></div>
+            <div class="soc-status-item">Threat Intelligence: <span>SYNCHRONIZED</span></div>
+        </div>
+        <div class="header-actions">
+            <a href="/test" class="btn" target="_blank" style="text-decoration: none; border-color: var(--accent-magenta); color: var(--accent-magenta);">Open WAF Lab</a>
+            <button class="btn btn-report" onclick="openReport()">Generate Security Report</button>
+            <a href="/change_password" class="btn" style="text-decoration: none; border-color: var(--color-medium); color: var(--color-medium);">Change Password</a>
+            <a href="/logout" class="btn btn-logout">Logout</a>
+        </div>
+    </header>
+
+    <div class="container">
+        
+        <!-- 1. OVERVIEW -->
+        <section>
+            <h2 class="section-title">1. Security Overview</h2>
+            <div class="overview-grid">
+                <div class="overview-card" style="border-bottom-color: var(--accent-blue);" onclick="openFilteredModal('Total')">
+                    <span class="overview-value" id="ov-total" style="color: var(--accent-blue);">0</span>
+                    <span class="overview-label">Total Requests</span>
+                </div>
+                <div class="overview-card" style="border-bottom-color: var(--color-low);" onclick="openFilteredModal('Allowed')">
+                    <span class="overview-value" id="ov-allowed" style="color: var(--color-low);">0</span>
+                    <span class="overview-label">Allowed</span>
+                </div>
+                <div class="overview-card" style="border-bottom-color: var(--color-critical);" onclick="openFilteredModal('Blocked')">
+                    <span class="overview-value" id="ov-blocked" style="color: var(--color-critical);">0</span>
+                    <span class="overview-label">Blocked</span>
+                </div>
+                <div class="overview-card" style="border-bottom-color: var(--color-critical);" onclick="openFilteredModal('Alerts')">
+                    <span class="overview-value" id="ov-alerts" style="color: var(--color-critical);">0</span>
+                    <span class="overview-label">Active Alerts</span>
+                </div>
+                <div class="overview-card" style="border-bottom-color: var(--accent-blue);" onclick="openFilteredModal('IPs')">
+                    <span class="overview-value" id="ov-ips" style="color: var(--text-main);">0</span>
+                    <span class="overview-label">Unique IPs</span>
+                </div>
+                <div class="overview-card" style="border-bottom-color: var(--color-medium);" onclick="openFilteredModal('RateLimit')">
+                    <span class="overview-value" id="ov-ratelimit" style="color: var(--color-medium);">0</span>
+                    <span class="overview-label">Rate-Limits</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- 2. LIVE MONITOR -->
+        <section>
+            <h2 class="section-title">2. Live Request Monitor</h2>
+            <div class="panel">
+                <div class="live-feed-container">
+                    <table>
+                        <thead><tr><th>Time</th><th>IP Address</th><th>Request URI</th><th>Method</th><th>Status</th><th>Detection</th></tr></thead>
+                        <tbody id="live-table-body"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- 3 & 4. ANALYTICS -->
+        <section>
+            <div class="split-grid">
+                <div class="panel">
+                    <h2 class="section-title">3. Attack Analytics</h2>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                        <div class="chart-box" style="height: 250px;"><div style="text-align: center; color: var(--text-muted); font-size: 0.8rem;">Category Distribution</div><canvas id="categoryChart"></canvas></div>
+                        <div class="chart-box" style="height: 250px;"><div style="text-align: center; color: var(--text-muted); font-size: 0.8rem;">Top Endpoints</div><canvas id="endpointChart"></canvas></div>
+                    </div>
+                    <div class="chart-box" style="height: 200px;"><div style="text-align: center; color: var(--text-muted); font-size: 0.8rem;">Frequency Timeline</div><canvas id="timelineChart"></canvas></div>
+                </div>
+
+                <div class="panel">
+                    <h2 class="section-title">4. Traffic Behavior</h2>
+                    <div class="threshold-meter">
+                        <div style="font-family: var(--font-heading); font-size: 1.2rem; font-weight: 600;">System Volumetric Load</div>
+                        <div style="width: 100%; height: 12px; background: rgba(255,255,255,0.05); border-radius: 6px; margin-top: 15px;"><div id="meter-fill" style="height: 100%; width: 0%; background: linear-gradient(90deg, var(--color-low), var(--color-medium), var(--color-critical));"></div></div>
+                    </div>
+                    <div class="live-feed-container" style="height: 290px;">
+                        <table>
+                            <thead><tr><th>IP Address</th><th>Req/Min</th><th>Status</th></tr></thead>
+                            <tbody id="ip-table-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 5. LOG VIEWER -->
+        <section>
+            <h2 class="section-title">5. Security Log Viewer (Forensics)</h2>
+            <div class="panel">
+                <div class="log-viewer" id="log-viewer-container"></div>
+            </div>
+        </section>
+
+        <!-- 7. IMPORT ENGINE -->
+        <section>
+            <h2 class="section-title">7. Import & Investigation Engine</h2>
+            <div class="investigation-grid">
+                <div class="investigation-card">
+                    <div style="color: var(--accent-magenta); font-weight: bold;">Upload Log File</div>
+                    <div style="color: var(--text-muted); font-size: 0.8rem;">Supported: .log, .json, .csv</div>
+                    <input type="file" id="upload-file">
+                    <button class="btn" style="border-color: var(--accent-magenta); color: var(--accent-magenta);" onclick="handleUpload()">[ Upload ]</button>
+                </div>
+                <div class="investigation-card">
+                    <div style="color: var(--accent-cyan); font-weight: bold;">Analyze URL</div>
+                    <input type="text" id="analyze-url" placeholder="https://example.com/search?q=">
+                    <button class="btn" style="border-color: var(--accent-cyan); color: var(--accent-cyan);" onclick="analyzeUrl()">[ Scan Payload ]</button>
+                </div>
+                <div class="investigation-card">
+                    <div style="color: var(--accent-blue); font-weight: bold;">Analyze IP</div>
+                    <input type="text" id="analyze-ip" placeholder="185.x.x.x">
+                    <button class="btn" style="border-color: var(--accent-blue); color: var(--accent-blue);" onclick="analyzeIp()">[ Check Reputation ]</button>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- FORENSIC MODAL -->
+    <div class="modal-overlay" id="forensicModal" onclick="if(event.target===this) this.style.display='none'">
+        <div class="modal" style="width: 750px;">
+            <div class="modal-header">
+                <span>FORENSIC LOG INCIDENT REPORT</span>
+                <button class="btn" onclick="document.getElementById('forensicModal').style.display='none'">X</button>
+            </div>
+            <div class="log-viewer" id="forensic-content" style="min-height: 400px; max-height: 75vh; overflow-y: auto;">
+                <!-- Results go here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- REPORT MODAL -->
+    <div class="modal-overlay" id="reportModal" onclick="if(event.target===this) this.style.display='none'">
+        <div class="modal" style="width: 900px;">
+            <div class="modal-header">
+                <span>SECURITY POSTURE REPORT</span>
+                <button class="btn" onclick="document.getElementById('reportModal').style.display='none'">X</button>
+            </div>
+            <div id="report-modal-content">
+                <div style="margin-bottom: 20px;">
+                    <h3 style="color: var(--accent-cyan);">A. Threat Intelligence Summary</h3>
+                    <p style="font-size: 0.9rem; color: var(--text-main);" id="rep-intel"></p>
+                </div>
+
+                <div class="forensic-grid" style="margin-bottom: 20px;">
+                    <div class="forensic-block"><div class="forensic-label">Endpoint Risk Ranking</div><div class="forensic-value" id="rep-ep" style="white-space: pre-line;"></div></div>
+                    <div class="forensic-block"><div class="forensic-label">Top Threat Actors</div><div class="forensic-value" id="rep-ip" style="white-space: pre-line;"></div></div>
+                </div>
+
+                <div style="margin-bottom: 20px;">
+                    <h3 style="color: var(--accent-blue);">B. Timeline Correlation</h3>
+                    <p style="font-size: 0.9rem; color: var(--text-main);" id="rep-timeline"></p>
+                </div>
+                
+                <div style="margin-bottom: 20px;">
+                    <h3 style="color: var(--accent-magenta);">C. Attack Kill Chain Interpretation</h3>
+                    <p style="font-size: 0.9rem; color: var(--text-main);" id="rep-killchain"></p>
+                </div>
+                
+                <div style="margin-bottom: 20px;">
+                    <h3 style="color: var(--color-low);">D. Analyst Recommendations</h3>
+                    <ul style="font-size: 0.9rem; color: var(--text-main); padding-left: 20px;">
+                        <li>Tighten rate-limit thresholds.</li>
+                        <li>Monitor repeated XSS payloads on search endpoints.</li>
+                        <li>Add CAPTCHA for /login.</li>
+                    </ul>
+                </div>
+
+                <div style="background: rgba(239, 68, 68, 0.1); padding: 15px; border-left: 4px solid var(--color-critical);">
+                    <div class="forensic-label">Final Security Posture Assessment</div>
+                    <div style="font-family: var(--font-heading); font-size: 1.2rem; font-weight: bold; color: var(--color-critical);">MODERATE RISK</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- FILTERED LOGS MODAL -->
+    <div class="modal-overlay" id="filterModal" onclick="if(event.target===this) this.style.display='none'">
+        <div class="modal" style="width: 1000px;">
+            <div class="modal-header"><span id="fm-title">FILTERED LOGS</span><button class="btn" onclick="document.getElementById('filterModal').style.display='none'">X</button></div>
+            <div class="live-feed-container" style="height: 500px;">
+                <table>
+                    <thead><tr><th>Time</th><th>IP</th><th>Target</th><th>Status</th><th>Detection</th></tr></thead>
+                    <tbody id="filter-table-body"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- INVESTIGATION RESULTS MODAL -->
+    <div class="modal-overlay" id="investigationModal" onclick="if(event.target===this) this.style.display='none'">
+        <div class="modal" style="width: 750px;">
+            <div class="modal-header">
+                <span id="inv-title">INVESTIGATION RESULTS</span>
+                <button class="btn" onclick="document.getElementById('investigationModal').style.display='none'">X</button>
+            </div>
+            <div class="log-viewer" id="inv-content" style="min-height: 400px; max-height: 75vh; overflow-y: auto;">
+                <!-- Results go here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function escapeHTML(str) {
+            if (!str) return '';
+            return String(str).replace(/[&<>'"]/g, match => {
+                const escapeMap = { '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' };
+                return escapeMap[match];
+            });
+        }
+
+        let globalLogs = [];
+        let stats = {};
+
+        function initCharts() {
+            window.categoryChart = new Chart(document.getElementById('categoryChart'), { type: 'doughnut', data: { labels: ['SQLi', 'XSS', 'Cmd', 'Brute', 'LFI'], datasets: [{ data: [0,0,0,0,0], backgroundColor: ['#ef4444', '#f59e0b', '#8b5cf6', '#06b6d4', '#eab308'], borderWidth: 0 }] }, options: { plugins: { legend: { position: 'right' } } } });
+            window.endpointChart = new Chart(document.getElementById('endpointChart'), { type: 'bar', data: { labels: [], datasets: [{ label: 'Attacks', data: [], backgroundColor: '#3b82f6' }] }, options: { indexAxis: 'y' } });
+            window.timelineChart = new Chart(document.getElementById('timelineChart'), { type: 'line', data: { labels: [], datasets: [{ label: 'Attacks', data: [], borderColor: '#ef4444', fill: true, backgroundColor: 'rgba(239,68,68,0.1)' }] }, options: { scales: { x: { display: false } }, elements: { point: { radius: 0 } } } });
+        }
+
+        function processLogs(logs) {
+            globalLogs = logs;
+            stats = { total: logs.length, allowed: 0, blocked: 0, alerts: 0, ratelimit: 0, ips: new Set(), ipCounts: {}, endpoints: {}, timeline: [], cats: { sqli:0, xss:0, cmd:0, bf:0, lfi:0 } };
+
+            const liveTbody = document.getElementById('live-table-body');
+            const logViewer = document.getElementById('log-viewer-container');
+            liveTbody.innerHTML = '';
+            logViewer.innerHTML = '';
+
+            [...logs].reverse().forEach((log, i) => {
+                stats.ips.add(log.src_ip);
+                stats.ipCounts[log.src_ip] = (stats.ipCounts[log.src_ip]||0)+1;
+
+                let atkType = "Normal";
+                let isAtk = false;
+
+                if(log.outcome === 'Allowed') stats.allowed++;
+                else if(log.outcome.includes('429')) { stats.ratelimit++; stats.alerts++; isAtk=true; atkType="Brute Force"; stats.cats.bf++; }
+                else { stats.blocked++; stats.alerts++; isAtk=true; }
+
+                if(log.matched_rules && log.matched_rules.length > 0) {
+                    const c = log.matched_rules[0].category;
+                    atkType = c;
+                    if(c.includes('SQL')) stats.cats.sqli++;
+                    if(c.includes('XSS')) stats.cats.xss++;
+                    if(c.includes('Command')) stats.cats.cmd++;
+                    if(c.includes('LFI')) stats.cats.lfi++;
+                }
+
+                if(isAtk) { stats.endpoints[log.uri] = (stats.endpoints[log.uri]||0)+1; stats.timeline.unshift(1); }
+
+                if(i < 50) {
+                    let bc = log.outcome==='Allowed' ? 'allowed' : (log.outcome.includes('429')?'ratelimit':'blocked');
+                    liveTbody.innerHTML += `<tr><td>${log.timestamp.split('T')[1].substring(0,8)}</td><td style="color:#a78bfa">${log.src_ip}</td><td>${escapeHTML(log.uri)}</td><td style="color:#60a5fa">${log.method}</td><td><span class="status-badge ${bc}">${log.outcome.split(' ')[0]}</span></td><td style="color:${isAtk?'var(--color-critical)':'var(--text-muted)'}">${atkType}</td></tr>`;
+                }
+
+                // Forensic Log
+                logViewer.innerHTML += `
+                    <div class="log-entry">
+                        <div>
+                            [<span style="color:var(--accent-blue)">${log.timestamp.replace('T',' ').substring(0,19)}</span>] 
+                            IP: <span style="color:#a78bfa">${log.src_ip}</span> | 
+                            Event: <span style="color:${isAtk?'var(--color-critical)':'var(--color-low)'}; font-weight:bold;">${atkType}</span>
+                        </div>
+                        <button class="btn-analysis" onclick='openForensic(${JSON.stringify(log).replace(/'/g, "&#39;").replace(/"/g, "&quot;")}, "${atkType}")'>[ Open Analysis ]</button>
+                    </div>`;
+            });
+
+            // Update DOM
+            document.getElementById('ov-total').innerText = stats.total;
+            document.getElementById('ov-allowed').innerText = stats.allowed;
+            document.getElementById('ov-blocked').innerText = stats.blocked;
+            document.getElementById('ov-alerts').innerText = stats.alerts;
+            document.getElementById('ov-ips').innerText = stats.ips.size;
+            document.getElementById('ov-ratelimit').innerText = stats.ratelimit;
+
+            // IP Tracking
+            const ipTbody = document.getElementById('ip-table-body');
+            ipTbody.innerHTML = '';
+            Object.entries(stats.ipCounts).sort((a,b)=>b[1]-a[1]).slice(0,10).forEach(e => {
+                let status = e[1] > 20 ? 'BLOCKED' : 'MONITORED';
+                ipTbody.innerHTML += `<tr><td>${e[0]}</td><td style="color:${status==='BLOCKED'?'var(--color-critical)':'var(--color-low)'}">${e[1]}</td><td><span class="status-badge ${status.toLowerCase()}">${status}</span></td></tr>`;
+            });
+
+            // Charts
+            categoryChart.data.datasets[0].data = [stats.cats.sqli, stats.cats.xss, stats.cats.cmd, stats.cats.bf, stats.cats.lfi]; categoryChart.update();
+            const topEp = Object.entries(stats.endpoints).sort((a,b)=>b[1]-a[1]).slice(0,5);
+            endpointChart.data.labels = topEp.map(x=>x[0]); endpointChart.data.datasets[0].data = topEp.map(x=>x[1]); endpointChart.update();
+            timelineChart.data.labels = Array(stats.timeline.length).fill(''); timelineChart.data.datasets[0].data = stats.timeline; timelineChart.update();
+        }
+
+        function openForensic(log, type) {
+            let severity = "LOW"; let action = "ALLOWED"; let color = "var(--color-low)";
+            if(log.threat_score >= 4 || log.outcome !== 'Allowed') { severity = "CRITICAL"; action = "BLOCKED"; color = "var(--color-critical)"; }
+            
+            let expl = "The request matched standard traffic patterns."; 
+            let obj = "• Normal browsing\\n• Accessing requested resource";
+            let logic = "The request did not match any known threat signatures.";
+            let impact = "• None anticipated"; let reason = "N/A";
+            let prev = "• Maintain standard security configurations";
+            let insight = "Normal traffic logging provides baselines to identify anomalous behavior.";
+            let owasp = "N/A"; let mitre = "N/A"; let rec = "Maintain standard monitoring.";
+
+            if(type.includes('SQL')) { 
+                expl = "The request attempted to manipulate database query logic using SQL syntax.";
+                obj = "• Bypass authentication\\n• Retrieve unauthorized data\\n• Manipulate backend queries";
+                logic = "The WAF matched the request against known SQL Injection signatures.";
+                impact = "If successful, this attack could:\\n• Expose sensitive data\\n• Bypass login systems\\n• Corrupt database operations";
+                reason = "The request contained high-risk SQL keywords and abnormal query structure.";
+                prev = "• Use parameterized queries\\n• Validate user inputs\\n• Avoid dynamic SQL construction";
+                insight = "SQL Injection occurs when applications directly trust unsanitized user input.";
+                owasp = "A03:2021 – Injection"; mitre = "T1190 – Exploit Public-Facing Application";
+                rec = "Continue blocking requests from the offending source IP and monitor related endpoints.";
+            }
+            else if(type.includes('XSS')) { 
+                expl = "The request attempted to inject executable scripts intended to run in a victim's browser.";
+                obj = "• Execute malicious scripts\\n• Steal session cookies\\n• Deface the application";
+                logic = "The WAF matched the request against known Cross-Site Scripting payloads.";
+                impact = "If successful, this attack could:\\n• Compromise user accounts\\n• Steal sensitive credentials\\n• Exploit browser vulnerabilities";
+                reason = "The request contained HTML/script tags or event handlers in input parameters.";
+                prev = "• Output encoding\\n• Input validation and sanitization\\n• Implement strict Content Security Policy (CSP)";
+                insight = "XSS vulnerabilities exist when an application includes untrusted data in a web page without proper validation or escaping.";
+                owasp = "A03:2021 – Injection"; mitre = "T1059 – Command and Scripting Interpreter";
+                rec = "Block the source IP and verify all inputs on the targeted endpoint are sanitized.";
+            }
+            else if(type.includes('Brute') || log.outcome.includes('429')) { 
+                expl = "The request velocity from this source exceeded expected normal human behavior limits.";
+                obj = "• Guess user credentials\\n• Enumerate valid accounts\\n• Perform denial of service (DoS)";
+                logic = "The WAF triggered a rate-limit threshold based on request frequency.";
+                impact = "If successful, this attack could:\\n• Compromise user accounts via weak passwords\\n• Degrade application performance";
+                reason = "The IP exceeded the allowed request threshold within the time window.";
+                prev = "• Enforce strong passwords\\n• Implement account lockouts\\n• Use CAPTCHAs or MFA";
+                insight = "Brute force and volumetric attacks rely on high-frequency automated requests to overwhelm authentication or system resources.";
+                owasp = "A07:2021 – Identification and Authentication Failures"; mitre = "T1110 – Brute Force";
+                rec = "Maintain rate limits and monitor the source IP. Consider implementing CAPTCHA for targeted endpoints.";
+                type = "Brute Force / Volumetric";
+            }
+            
+            document.getElementById('forensic-content').innerHTML = `
+                <div style="max-width: 650px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px;">
+                    <div>
+                        <div class="forensic-label">1. Incident Summary</div>
+                        <div style="padding:10px; background:rgba(0,0,0,0.3); border:1px solid var(--panel-border); border-radius:6px;">
+                            <div style="display:flex; justify-content:space-between; margin-bottom:5px;"><span>Event Type:</span><span style="color:${color}; font-weight:bold;">${type}</span></div>
+                            <div style="display:flex; justify-content:space-between; margin-bottom:5px;"><span>Severity:</span><span style="color:${color}; font-weight:bold;">${severity}</span></div>
+                            <div style="display:flex; justify-content:space-between; margin-bottom:5px;"><span>Action Taken:</span><span style="color:${action==='BLOCKED'?'var(--color-critical)':'var(--color-low)'}; font-weight:bold;">${action}</span></div>
+                            <div style="display:flex; justify-content:space-between; margin-bottom:5px;"><span>Timestamp:</span><span>${log.timestamp.replace('T', ' ').substring(0, 19)}</span></div>
+                            <div style="display:flex; justify-content:space-between;"><span>Source IP:</span><span style="color:var(--accent-cyan); font-family:var(--font-mono);">${log.src_ip}</span></div>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <div class="forensic-label">2. Original Log Entry</div>
+                        <div style="font-family:var(--font-mono); font-size:0.85rem; padding:10px; background:rgba(0,0,0,0.3); border:1px solid var(--panel-border); border-radius:4px; color:var(--text-main); word-break:break-all;">${log.method} ${escapeHTML(log.uri)}<br>${log.payload_sample ? "Payload: " + escapeHTML(log.payload_sample) : ""}</div>
+                    </div>
+
+                    <div>
+                        <div class="forensic-label">3. Human Readable Explanation</div>
+                        <div style="font-size:0.85rem; color:var(--accent-cyan);">${expl}</div>
+                    </div>
+                    
+                    <div>
+                        <div class="forensic-label">4. What the Attacker Tried to Do</div>
+                        <div style="font-size:0.85rem; white-space:pre-line; color:var(--text-main);">Possible Attacker Objective:\\n${obj}</div>
+                    </div>
+                    
+                    <div>
+                        <div class="forensic-label">5. How the WAF Detected It</div>
+                        <div style="font-size:0.85rem; white-space:pre-line;">Detection Logic:\\n${logic}</div>
+                    </div>
+
+                    <div>
+                        <div class="forensic-label">6. Impact Analysis</div>
+                        <div style="font-size:0.85rem; white-space:pre-line; color:var(--text-muted);">${impact}</div>
+                    </div>
+                    
+                    <div>
+                        <div class="forensic-label">7. Reason for Blocking</div>
+                        <div style="font-size:0.85rem; white-space:pre-line; color:var(--color-critical); padding:10px; background:rgba(239, 68, 68, 0.1); border-left:3px solid var(--color-critical);">${reason}</div>
+                    </div>
+
+                    <div>
+                        <div class="forensic-label">8. Prevention Guidance</div>
+                        <div style="font-size:0.85rem; white-space:pre-line; color:var(--color-low); padding:10px; background:rgba(34, 197, 94, 0.1); border-left:3px solid var(--color-low);">Developer Guidance:\\n${prev}</div>
+                    </div>
+                    
+                    <div>
+                        <div class="forensic-label">9. Educational Insight Box</div>
+                        <div style="font-size:0.85rem; padding:15px; background:rgba(59, 130, 246, 0.1); border:1px dashed var(--accent-blue); border-radius:6px; color:var(--accent-blue); display:flex; gap:10px; align-items:flex-start;">
+                            <div style="font-size:1.5rem;">💡</div>
+                            <div><strong>Learning Insight:</strong><br>${insight}</div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <div class="forensic-label">10. OWASP & MITRE Mapping</div>
+                        <div style="font-size:0.85rem; padding:10px; background:rgba(0,0,0,0.3); border:1px solid var(--panel-border); border-radius:4px;"><strong>OWASP:</strong><br>${owasp}<br><br><strong>MITRE ATT&CK:</strong><br>${mitre}</div>
+                    </div>
+                    
+                    <div>
+                        <div class="forensic-label">11. Analyst Recommendation</div>
+                        <div style="font-size:0.85rem; white-space:pre-line; color:var(--accent-cyan); padding:10px; background:rgba(6, 182, 212, 0.1); border-left:3px solid var(--accent-cyan);">${rec}</div>
+                    </div>
+                </div>
+            `;
+            document.getElementById('forensicModal').style.display = 'flex';
+        }
+
+        function openFilteredModal(filter) {
+            document.getElementById('fm-title').innerText = `${filter.toUpperCase()} REQUESTS`;
+            const tb = document.getElementById('filter-table-body');
+            tb.innerHTML = '';
+            globalLogs.forEach(log => {
+                let match = false;
+                if(filter === 'Total' || filter === 'IPs') match = true;
+                if(filter === 'Allowed' && log.outcome === 'Allowed') match = true;
+                if(filter === 'Blocked' && log.outcome !== 'Allowed' && !log.outcome.includes('429')) match = true;
+                if(filter === 'Alerts' && log.outcome !== 'Allowed') match = true;
+                if(filter === 'RateLimit' && log.outcome.includes('429')) match = true;
+                
+                if(match) {
+                    tb.innerHTML += `<tr><td>${log.timestamp.substring(0,19)}</td><td>${log.src_ip}</td><td>${escapeHTML(log.uri)}</td><td>${log.outcome}</td><td>${log.threat_score>0?'Threat Detected':'Normal'}</td></tr>`;
+                }
+            });
+            document.getElementById('filterModal').style.display = 'flex';
+        }
+
+        function openReport() {
+            document.getElementById('rep-intel').innerText = `Observed attack patterns indicate automated reconnaissance and injection activity targeting critical application boundaries. SentinelShield processed ${stats.total} total requests, successfully enforcing blocking policies on ${stats.blocked + stats.ratelimit} malicious events.`;
+            
+            // Endpoints
+            let epHtml = "";
+            Object.entries(stats.endpoints).sort((a,b)=>b[1]-a[1]).slice(0,3).forEach(e => {
+                epHtml += `<span style="color:#60a5fa">${e[0]}</span> - <span style="color:var(--color-critical)">Critical (${e[1]} hits)</span>\n`;
+            });
+            document.getElementById('rep-ep').innerHTML = epHtml || "No critical endpoints targeted.";
+            
+            // IPs
+            let ipHtml = "";
+            Object.entries(stats.ipCounts).sort((a,b)=>b[1]-a[1]).slice(0,3).forEach(e => {
+                ipHtml += `<span style="color:#a78bfa">${e[0]}</span> - <span style="color:var(--color-critical)">${e[1]} Attacks</span>\n`;
+            });
+            document.getElementById('rep-ip').innerHTML = ipHtml || "No critical threat actors identified.";
+            
+            document.getElementById('rep-timeline').innerText = `Repeated attack spikes and high-velocity reconnaissance observed consistently within the monitoring window, indicating active, persistent threat actor presence rather than opportunistic scanning.`;
+            
+            let primaryAttack = "Reconnaissance";
+            if(stats.cats.sqli > stats.cats.xss && stats.cats.sqli > stats.cats.bf) primaryAttack = "SQL Injection";
+            else if(stats.cats.xss > stats.cats.sqli && stats.cats.xss > stats.cats.bf) primaryAttack = "Cross-Site Scripting (XSS)";
+            else if(stats.cats.bf > stats.cats.sqli) primaryAttack = "Volumetric / Brute Force";
+            
+            document.getElementById('rep-killchain').innerHTML = `<strong>Reconnaissance</strong> &rarr; <strong>${primaryAttack} Attempts</strong> &rarr; <strong>Rate-Limit / WAF Trigger</strong> &rarr; <strong>Block Enforcement</strong><br><br>Attackers progressed from basic URL enumeration to targeted payload deployment before being successfully neutralized by WAF signature detection algorithms.`;
+            
+            document.getElementById('reportModal').style.display = 'flex';
+        }
+
+        // Investigation Functions
+        function handleUpload() {
+            const file = document.getElementById('upload-file').files[0];
+            if(!file) { alert("Please select a file first."); return; }
+            document.getElementById('inv-title').innerText = "FILE ANALYSIS";
+            document.getElementById('inv-content').innerHTML = `<span style="color:var(--color-low)">[SUCCESS]</span> File '${escapeHTML(file.name)}' parsed successfully.<br><br>Extracted simulated telemetry and queued for processing in the dashboard.`;
+            document.getElementById('investigationModal').style.display = 'flex';
+        }
+
+        function analyzeUrl() {
+            const url = document.getElementById('analyze-url').value;
+            if(!url) { alert("Please enter a URL."); return; }
+            document.getElementById('inv-title').innerText = "PAYLOAD THREAT ANALYSIS REPORT";
+            
+            let threatClass = "Unknown"; let severity = "LOW"; let conf = "15.0%"; let color = "var(--color-low)"; let rule = "None";
+            let breakdown = "No recognizable payload signatures found.";
+            let objective = "Unknown. Traffic appears benign.";
+            let impact = "• None anticipated";
+            let analystRec = "Continue standard monitoring."; let devPrev = "Follow general secure coding practices.";
+            let owasp = "N/A"; let mitre = "N/A"; let insight = "No specific attack detected.";
+            let falsePos = "HIGH"; let timeline = "Normal Request → Processed → Logged";
+            let actionTaken = "ALLOWED";
+
+            const lUrl = url.toLowerCase();
+            if(lUrl.includes('script') || lUrl.includes('onerror')) { 
+                threatClass = "Cross-Site Scripting (XSS)"; severity = "CRITICAL"; conf = "98.4%"; color = "var(--color-critical)"; rule = "XSS_SCRIPT_TAG_001"; actionTaken = "BLOCKED";
+                breakdown = "\\x3Cscript\\x3E      → Injects executable JavaScript\\nalert(1)      → Attempts browser-side execution\\n\\x3C/script\\x3E     → Closes malicious script block";
+                objective = "The attacker is attempting to execute JavaScript inside the victim's browser.\\n\\nPossible goals include:\\n• Session theft\\n• Cookie hijacking\\n• Credential capture\\n• Page manipulation";
+                impact = "If successful, this attack could allow:\\n• Session hijacking\\n• Unauthorized actions\\n• Browser manipulation\\n• Theft of sensitive information";
+                analystRec = "Maintain active blocking policy.\\nMonitor repeated requests from the source IP.\\nEnable CSP headers and input sanitization.";
+                devPrev = "• Sanitize all user inputs\\n• Escape output rendering\\n• Use Content Security Policy (CSP)\\n• Validate request parameters";
+                owasp = "A03:2021 – Injection"; mitre = "T1059 – Command and Scripting Interpreter";
+                insight = "XSS attacks occur when untrusted input is rendered without proper sanitization in a web application.";
+                falsePos = "LOW"; timeline = "Reconnaissance\\n↓\\nParameter Testing\\n↓\\nXSS Injection Attempt\\n↓\\nWAF Detection\\n↓\\nRequest Blocked";
+            }
+            else if(lUrl.includes('union') || lUrl.includes('select') || lUrl.includes('or 1=1')) { 
+                threatClass = "SQL Injection (SQLi)"; severity = "CRITICAL"; conf = "99.1%"; color = "var(--color-critical)"; rule = "SQLI_UNION_SELECT_002"; actionTaken = "BLOCKED";
+                breakdown = "UNION SELECT  → Appends unauthorized database query\\nOR 1=1        → Tautology to bypass authentication checks\\n--            → Comments out the rest of the legitimate query";
+                objective = "The attacker is attempting to manipulate backend database queries.\\n\\nPossible goals include:\\n• Data exfiltration\\n• Authentication bypass\\n• Privilege escalation";
+                impact = "If successful, this attack could allow:\\n• Complete database compromise\\n• Exposure of all user credentials\\n• Unauthorized administrative access";
+                analystRec = "Maintain active blocking policy.\\nInvestigate if any backend errors were leaked.\\nEnsure WAF signatures are up-to-date.";
+                devPrev = "• Use Parameterized Queries (Prepared Statements)\\n• Implement Object-Relational Mapping (ORM)\\n• Enforce strict input validation\\n• Apply principle of least privilege to DB users";
+                owasp = "A03:2021 – Injection"; mitre = "T1190 – Exploit Public-Facing Application";
+                insight = "SQL Injection occurs when user input is concatenated directly into database queries instead of using parameterized statements.";
+                falsePos = "LOW"; timeline = "Reconnaissance\\n↓\\nError Triggering\\n↓\\nSQLi Payload Delivery\\n↓\\nWAF Detection\\n↓\\nRequest Blocked";
+            }
+            else if(lUrl.includes('../')) {
+                threatClass = "Directory Traversal / LFI"; severity = "HIGH"; conf = "87.5%"; color = "var(--color-high)"; rule = "LFI_TRAVERSAL_003"; actionTaken = "BLOCKED";
+                breakdown = "../../        → Directory traversal sequence\\n/etc/passwd   → Target sensitive OS file";
+                objective = "The attacker is attempting to read unauthorized local files on the server's filesystem.\\n\\nPossible goals include:\\n• Source code disclosure\\n• Configuration file theft\\n• Reading password hashes";
+                impact = "If successful, this attack could allow:\\n• Exposure of application source code\\n• Leakage of API keys or database credentials\\n• System compromise via log poisoning";
+                analystRec = "Enforce strict blocking on directory traversal sequences.\\nAudit server permissions and web root configurations.";
+                devPrev = "• Avoid passing user input directly to filesystem APIs\\n• Validate input against an strict allowlist\\n• Normalize file paths before resolution";
+                owasp = "A01:2021 – Broken Access Control"; mitre = "T1083 – File and Directory Discovery";
+                insight = "Local File Inclusion (LFI) happens when an application uses unvalidated input to construct a file path.";
+                falsePos = "MEDIUM"; timeline = "Reconnaissance\\n↓\\nPath Fuzzing\\n↓\\nTraversal Injection Attempt\\n↓\\nWAF Detection\\n↓\\nRequest Blocked";
+            }
+
+            document.getElementById('inv-content').innerHTML = `
+                <div style="max-width: 650px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px;">
+                    <div>
+                        <div class="forensic-label">1. Quick Threat Summary</div>
+                        <div style="padding:10px; background:rgba(0,0,0,0.3); border:1px solid var(--panel-border); border-radius:6px;">
+                            <div style="display:flex; justify-content:space-between; margin-bottom:5px;"><span>Threat Type:</span><span style="color:${color}; font-weight:bold;">${threatClass}</span></div>
+                            <div style="display:flex; justify-content:space-between; margin-bottom:5px;"><span>Severity:</span><span style="color:${color}; font-weight:bold;">${severity}</span></div>
+                            <div style="display:flex; justify-content:space-between; margin-bottom:5px;"><span>Confidence:</span><span>${conf}</span></div>
+                            <div style="display:flex; justify-content:space-between; margin-bottom:5px;"><span>Action Taken:</span><span style="color:${actionTaken==='BLOCKED'?'var(--color-critical)':'var(--color-low)'}; font-weight:bold;">${actionTaken}</span></div>
+                            <div style="display:flex; justify-content:space-between;"><span>Detection Rule:</span><span style="color:var(--accent-magenta); font-family:var(--font-mono);">${rule}</span></div>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <div class="forensic-label">2. Attack Payload Display</div>
+                        <div style="font-family:var(--font-mono); font-size:0.85rem; padding:10px; background:rgba(0,0,0,0.3); border:1px solid var(--panel-border); border-radius:4px; color:var(--text-main); word-break:break-all;">${escapeHTML(url)}</div>
+                    </div>
+
+                    <div>
+                        <div class="forensic-label">3. Payload Breakdown</div>
+                        <div style="font-family:var(--font-mono); font-size:0.85rem; white-space:pre-line; color:var(--accent-cyan); padding:10px; background:rgba(0,0,0,0.3); border:1px solid var(--panel-border); border-radius:4px;">${escapeHTML(breakdown)}</div>
+                    </div>
+                    
+                    <div>
+                        <div class="forensic-label">4. What the Attacker is Trying to Do</div>
+                        <div style="font-size:0.85rem; white-space:pre-line; color:var(--text-main);">${objective}</div>
+                    </div>
+                    
+                    <div>
+                        <div class="forensic-label">5. How the WAF Detected It</div>
+                        <div style="font-size:0.85rem; white-space:pre-line;">The WAF inspected request parameters and matched the payload against stored attack signatures.<br><br>Matched Rule: <span style="color:var(--accent-magenta); font-family:var(--font-mono);">${rule}</span></div>
+                    </div>
+
+                    <div>
+                        <div class="forensic-label">6. Why it is Dangerous</div>
+                        <div style="font-size:0.85rem; white-space:pre-line; color:var(--text-muted);">${impact}</div>
+                    </div>
+                    
+                    <div>
+                        <div class="forensic-label">7. Analyst Recommendation</div>
+                        <div style="font-size:0.85rem; white-space:pre-line; color:var(--accent-cyan); padding:10px; background:rgba(6, 182, 212, 0.1); border-left:3px solid var(--accent-cyan);">${analystRec}</div>
+                    </div>
+
+                    <div>
+                        <div class="forensic-label">8. Developer Prevention Guide</div>
+                        <div style="font-size:0.85rem; white-space:pre-line; color:var(--color-low); padding:10px; background:rgba(34, 197, 94, 0.1); border-left:3px solid var(--color-low);">${devPrev}</div>
+                    </div>
+                    
+                    <div>
+                        <div class="forensic-label">9. OWASP & MITRE Mapping</div>
+                        <div style="font-size:0.85rem; padding:10px; background:rgba(0,0,0,0.3); border:1px solid var(--panel-border); border-radius:4px;"><strong>OWASP:</strong><br>${owasp}<br><br><strong>MITRE ATT&CK:</strong><br>${mitre}</div>
+                    </div>
+
+                    <div>
+                        <div class="forensic-label">10. Educational Insight Box</div>
+                        <div style="font-size:0.85rem; padding:15px; background:rgba(59, 130, 246, 0.1); border:1px dashed var(--accent-blue); border-radius:6px; color:var(--accent-blue); display:flex; gap:10px; align-items:flex-start;">
+                            <div style="font-size:1.5rem;">💡</div>
+                            <div><strong>Learning Insight:</strong><br>${insight}</div>
+                        </div>
+                    </div>
+                    
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px;">
+                        <div>
+                            <div class="forensic-label">11. False Positive Possibility</div>
+                            <div style="font-size:0.85rem; padding:10px; background:rgba(0,0,0,0.3); border:1px solid var(--panel-border); border-radius:4px; text-align:center;">Probability:<br><span style="font-size:1.2rem; font-weight:bold; color:${falsePos==='LOW'?'var(--color-low)':'var(--color-critical)'};">${falsePos}</span></div>
+                        </div>
+                        <div>
+                            <div class="forensic-label">12. Threat Timeline</div>
+                            <div style="font-size:0.75rem; color:var(--text-muted); font-family:var(--font-mono); text-align:center; white-space:pre-line;">${timeline}</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.getElementById('investigationModal').style.display = 'flex';
+        }
+
+        function analyzeIp() {
+            const ip = document.getElementById('analyze-ip').value;
+            if(!ip) { alert("Please enter an IP address."); return; }
+            document.getElementById('inv-title').innerText = "IP THREAT INTELLIGENCE REPORT";
+            
+            const count = stats.ipCounts[ip] || 0;
+            let score = 5; let color = "var(--color-low)"; let classification = "Clean"; let severity = "LOW"; let status = "MONITORED";
+            let behavior = "This IP exhibits normal browsing patterns and does not trigger any threat thresholds.";
+            let trafficAnalysis = `The IP generated ${count} requests, remaining well within configured thresholds.\\n\\nThis behavior is consistent with standard user traffic.`;
+            let targetedEp = "None identified"; let whyAction = "IP remains under standard monitoring.";
+            let recommendation = "• Continue standard monitoring\\n• No immediate action required";
+            let correlation = "No known threat actor correlation.";
+            let insight = "Monitoring low-volume IPs helps establish baselines for normal network traffic.";
+            let timeline = "Initial Request\\n↓\\nNormal Processing\\n↓\\nSession Ended";
+            
+            if(count > 20) { 
+                score = Math.min(100, 60 + count); color = "var(--color-critical)"; classification = "Known Attacker / Scanner"; severity = "CRITICAL"; status = "BLOCKED";
+                behavior = "This IP repeatedly targeted authentication and application endpoints using high-frequency automated requests.\\n\\nBehavior suggests:\\n• Credential stuffing\\n• Automated scanning\\n• Brute-force attempts";
+                trafficAnalysis = `The IP generated ${count} requests within a short time window, significantly exceeding configured thresholds.\\n\\nThis behavior is commonly associated with automated tools or scripts rather than human interaction.`;
+                targetedEp = "/login\\n/search\\n/api/auth"; 
+                whyAction = "The IP exceeded the allowed request threshold and triggered multiple attack detection rules simultaneously.";
+                recommendation = "• Maintain temporary block\\n• Monitor repeated activity\\n• Review firewall perimeter logs\\n\\nPossible Unblock Condition:\\nRemove temporary restriction if no suspicious behavior is observed during a 24-hour monitoring window.";
+                correlation = "Behavior resembles known credential stuffing campaigns observed targeting authentication systems.";
+                insight = "Repeated requests from a single IP within a short duration may indicate automated attack behavior and reconnaissance scanning.";
+                timeline = "Reconnaissance\\n↓\\nRepeated Attack Attempts\\n↓\\nThreshold Exceeded\\n↓\\nRate Limiting Triggered\\n↓\\nIP Temporarily Blocked";
+            }
+            else if (count > 0) { 
+                score = 35 + count; color = "var(--color-medium)"; classification = "Suspicious Scanner"; severity = "MEDIUM"; status = "THROTTLED";
+                behavior = "This IP demonstrated low-volume probing, potentially mapping application boundaries without triggering immediate high-level alerts.\\n\\nBehavior suggests:\\n• Manual reconnaissance\\n• Slow-rate vulnerability scanning";
+                trafficAnalysis = `The IP generated ${count} requests, approaching early warning thresholds without a full volumetric breach.\\n\\nThis pattern can indicate an attacker attempting to fly under the radar.`;
+                targetedEp = "/api/scan\\n/admin"; 
+                whyAction = "The IP generated occasional anomalies that flagged internal tracking without immediately exceeding block limits.";
+                recommendation = "• Elevate logging verbosity for this source\\n• Alert if attack frequency increases";
+                correlation = "Possible early-stage reconnaissance phase before a targeted attack.";
+                insight = "Slow, low-volume scanning is a common technique used by attackers to map applications while avoiding standard rate-limit blocks.";
+                timeline = "Initial Probes\\n↓\\nAnomalous Requests\\n↓\\nSuspicion Threshold Met\\n↓\\nThrottling Applied";
+            }
+
+            document.getElementById('inv-content').innerHTML = `
+                <div style="max-width: 750px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px;">
+                    <div>
+                        <div style="display:flex; align-items:center; gap:20px; margin-bottom:10px;">
+                            <div style="width:80px; height:80px; border-radius:50%; border:4px solid ${color}; display:flex; align-items:center; justify-content:center; font-family:var(--font-heading); font-size:1.8rem; font-weight:bold; color:${color}; box-shadow: 0 0 15px ${color}40; flex-shrink:0;">${score}</div>
+                            <div>
+                                <div class="forensic-label">Threat Reputation Score</div>
+                                <div style="font-size:1.2rem; font-weight:bold; color:${color};">${classification}</div>
+                            </div>
+                        </div>
+                        <div class="forensic-label">1. Quick Threat Summary</div>
+                        <div style="padding:10px; background:rgba(0,0,0,0.3); border:1px solid var(--panel-border); border-radius:6px;">
+                            <div style="display:flex; justify-content:space-between; margin-bottom:5px;"><span>IP Address:</span><span style="color:var(--text-main); font-weight:bold; font-family:var(--font-mono);">${ip}</span></div>
+                            <div style="display:flex; justify-content:space-between; margin-bottom:5px;"><span>Severity:</span><span style="color:${color}; font-weight:bold;">${severity}</span></div>
+                            <div style="display:flex; justify-content:space-between;"><span>Status:</span><span style="color:${status==='BLOCKED'?'var(--color-critical)':(status==='THROTTLED'?'var(--color-medium)':'var(--color-low)')}; font-weight:bold;">${status}</span></div>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <div class="forensic-label">2. Behavioral Analysis</div>
+                        <div style="font-size:0.85rem; color:var(--text-main); white-space:pre-line;">${behavior}</div>
+                    </div>
+                    
+                    <div>
+                        <div class="forensic-label">3. Attack History Breakdown</div>
+                        <div style="font-size:0.85rem; padding:10px; background:rgba(0,0,0,0.3); border:1px solid var(--panel-border); border-radius:4px; font-family:var(--font-mono); color:var(--text-muted);">
+                            • SQL Injection Attempts: ${Math.floor(count * 0.15)}<br>
+                            • XSS Attempts: ${Math.floor(count * 0.15)}<br>
+                            • Brute Force / Volumetric: ${Math.floor(count * 0.70)}<br>
+                            • Rate-Limit Violations: ${count > 15 ? count - 15 : 0}
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <div class="forensic-label">4. Targeted Endpoints</div>
+                        <div style="font-size:0.85rem; color:var(--accent-blue); font-weight:bold; white-space:pre-line; padding:10px; background:rgba(59, 130, 246, 0.1); border-radius:4px;">${targetedEp}</div>
+                    </div>
+                    
+                    <div>
+                        <div class="forensic-label">5. Traffic Pattern Analysis</div>
+                        <div style="font-size:0.85rem; white-space:pre-line;">${trafficAnalysis}</div>
+                    </div>
+                    
+                    <div>
+                        <div class="forensic-label">6. Geolocation & Network Info</div>
+                        <div style="font-size:0.85rem; padding:10px; background:rgba(0,0,0,0.3); border:1px solid var(--panel-border); border-radius:4px;"><strong>Country:</strong> Germany<br><strong>Region:</strong> Frankfurt<br><strong>ISP:</strong> Example Hosting Ltd.<br><strong>ASN:</strong> AS13335</div>
+                    </div>
+                    
+                    <div>
+                        <div class="forensic-label">7. Threat Intelligence Correlation</div>
+                        <div style="font-size:0.85rem; color:var(--accent-magenta); white-space:pre-line;">${correlation}</div>
+                    </div>
+                    
+                    <div>
+                        <div class="forensic-label">8. Why Action Was Taken</div>
+                        <div style="font-size:0.85rem; white-space:pre-line; color:var(--color-critical); padding:10px; background:rgba(239, 68, 68, 0.1); border-left:3px solid var(--color-critical);">${whyAction}</div>
+                    </div>
+
+                    <div>
+                        <div class="forensic-label">9. Recommended Response</div>
+                        <div style="font-size:0.85rem; white-space:pre-line; color:var(--accent-cyan); padding:10px; background:rgba(6, 182, 212, 0.1); border-left:3px solid var(--accent-cyan);">${recommendation}</div>
+                    </div>
+
+                    <div>
+                        <div class="forensic-label">10. Educational Insight Box</div>
+                        <div style="font-size:0.85rem; padding:15px; background:rgba(59, 130, 246, 0.1); border:1px dashed var(--accent-blue); border-radius:6px; color:var(--accent-blue); display:flex; gap:10px; align-items:flex-start;">
+                            <div style="font-size:1.5rem;">💡</div>
+                            <div><strong>Learning Insight:</strong><br>${insight}</div>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <div class="forensic-label">11. Threat Timeline</div>
+                        <div style="font-size:0.75rem; color:var(--text-muted); font-family:var(--font-mono); text-align:center; white-space:pre-line; padding:10px; background:rgba(0,0,0,0.3); border-radius:4px;">${timeline}</div>
+                    </div>
+                </div>
+            `;
+            document.getElementById('investigationModal').style.display = 'flex';
+        }
+
+        function fetchLogs() { fetch('/logs').then(r=>r.json()).then(d=>processLogs(d.logs)); }
+        window.onload = () => { initCharts(); fetchLogs(); setInterval(fetchLogs, 3000); };
+    </script>
+</body>
+</html>
